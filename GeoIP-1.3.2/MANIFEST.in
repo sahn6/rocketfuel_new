@@ -1,3 +1,0 @@
-include ChangeLog LICENSE README.rst py_GeoIP.c
-recursive-include examples *.py
-recursive-include tests *.py
