@@ -1,0 +1,12 @@
+sudo: false
+
+language: python
+
+python:
+  - 2.6
+  - 2.7
+
+install:
+  - pip install pycrypto
+
+script: cd test/; for f in *.uts; do ./run_tests -q -F -t $f -K netaccess -K automaton || exit $?; done; for f in ../scapy/contrib/*.uts ; do ./run_tests -q -F -t $f -K netaccess -K automaton -P "load_contrib('$(basename ${f/.uts})')" || exit $?; done
