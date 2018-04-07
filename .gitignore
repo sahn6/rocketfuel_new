@@ -1,2 +1,5 @@
 *.htm
 *.txt
+GeoIP-1.3.2/
+GeoLite2-City_20180327/
+scapy-2.3.2/
