@@ -236,7 +236,6 @@ class ExecutionAndParsing:
                 print('ispPaths : ', ispPaths)
 
                 for exit in ispExits:
-#                    print"tracerouting...... toward ispExits"
                     for asnTrs, trs in traceRouteServerList.iteritems():
                         try:
                             tn=telnetlib.Telnet(trs[0],0,timeout=12000)
@@ -251,7 +250,7 @@ class ExecutionAndParsing:
                                     tn.write(trs[4] + b"\n")
                         tn.write("terminal length 0".encode('ascii')+"\n".encode('ascii'))
                     
-#                        print "Searching ISP path to exit: " + exit
+                        print "\n"+"tracerouting... to  " + exit
                         traceRoute="traceroute ".encode('ascii') + exit
 #                        print "traceroute : " + traceRoute
                         try:
@@ -273,14 +272,18 @@ class ExecutionAndParsing:
                         ip=[]
                         kk=0
                         try:
-                                while ip==[] or ip[0] != exitIP[0]:
+                                while ip==[] or ip[0] != exitIP[0] :
                                     print 'reading res with ttl ' + str(ttl)
                                     line = tn.read_until(b"\n")
                                     ttl=ttl+1
                                     parts=line.split()
                                     print 'parts : '+str(parts)
-                                    if any("*" in s for s in parts[1]):
+                                    if any("!A" in s for s in parts):
+                                        print"meet !A escape"
+                                        break
+                                    if any("*" in s for s in parts[3]):
                                         if kk > 1 :
+                                            print "too much *, escape"
                                             break
                                         kk=kk+1
                                         continue
