@@ -60,11 +60,11 @@ traceRouteServerList = {
                         ###'852':'route-views.ab.bb.telus.com',
 #                        '1838':['route-server.cerf.net'],
                         ###'2018':'route-server.tenet.ac.za',
-                        '3257':['route-server.ip.tiscali.net','login:','public','Password:','public'], #login: public / Password:public
+#                        '3257':['route-server.ip.tiscali.net','login:','public','Password:','public'], #login: public / Password:public
                         ###'3292':'route-server.ip.tdc.net',
 #                        '3303':['route-server.ip-plus.net'],
                         ##slow'3549':'route-server.gblx.net',
-#                        '3549':['route-server.eu.gblx.net'],
+                        '3549':['route-server.eu.gblx.net'],
                         ###'3561':'route-server.savvis.net',
 #                        '3741':['public-route-server.is.co.za','Username:','rviews','Password:','rviews'], #rviews=username&password
 #                        '4323':['route-server.twtelecom.net','login:','rviews','Password:','rviews123'], #username=rviews password=rviews123
@@ -106,11 +106,11 @@ traceRouteServerList = {
 #                        '3582':['route-views.oregon-ix.net','Username:','rviews']
                          }
 RV_SEM = 0
-EXITS_SEM = 0
+EXITS_SEM = 2
 TRS_SEM = 0
 LU_SEM = 0
 
-class EgressDiscovery: # Stage Two
+class EgressDiscovery: # search dependent prefix from BGP table
     @staticmethod
     def findAllDependentPrefixes(sss,myASN):
         print('START find all dependent Prefixes')
@@ -155,40 +155,7 @@ class EgressDiscovery: # Stage Two
                         if(str(myASN).encode('ascii') in parts): #ISP's ASN in route
                             line=tn.read_until(b"\n") # read end line
                             parts = line.split()
-#                            print('****telnet toward ', rv)
-#                            print(parts) # part is result of telnet toward routeview
-                            if(((len(parts)>2) and (b"." in parts[2])) or (rv[0] in line) or ('\r\n' == line)):   #got to new network destination
-                                bgpTall.write(networkDestination + "\n".encode('ascii')) #save last network destination as Dependent Prefix
-                                print "Independent Prefix added:"+ networkDestination +"\n!!!!!!findAllDependentPrefixes Function!!!!!!!!"
-                                break;
-                        else:
-                            line=tn.read_until(b"\n")
-                            parts = line.split()
-                            while not (((len(parts)>2) and (b"." in parts[2])) or (rv[0] in line) or ('\r\n' == line)):
-                                line=tn.read_until(b"\n")
-                                parts = line.split()
-                            break;
-            bgpTall.close()
-            RV_SEM=RV_SEM+1
-            tn.close
-
-class TasklistGeneration:
-    def findISPexits(ss,sss,myASN): #making tasklist for trace routing - ASN & IP (exit from the ISP)
-        print('START tasklist generation')
-        global RV_SEM
-        global EXITS_SEM
-        prefixesFile='as'+str(myASN)+'.htm'
-        myPrefixes = subnet_soup.getprefixes(prefixesFile)
-        for rv in routeViewList:
-            while RV_SEM <= 0:
-                print"In TasklistGene RV_SEM is 0, SLEEP"
-                time.sleep(30)
-            if RV_SEM>0:
-                RV_SEM=RV_SEM-1
-                if os.path.isfile(rv[0] +'-'+str(myASN)+ "-allDependentPrefixes.txt".encode('ascii')):
-                    dependentPrefixes=open(rv[0] +'-'+str(myASN)+ "-allDependentPrefixes.txt".encode('ascii'),"rb",0) # put the alldependent file into dependentprefix
-                    print('dependentPrefixes : ', dependentPrefixes)
-                else:
+#                            print( :
                     print "This file doesn't exsit: " + rv[0] +'-'+str(myASN)+ "-allDependentPrefixes.txt".encode('ascii')
                     continue
                 print(rv[0])
@@ -221,18 +188,18 @@ class TasklistGeneration:
                                         subnet= str(prefix[0]) + "/" + str(prefix[1])
                                         #print('subnet is : ', subnet)
                                         #print('IPAddress(ip[0]) : ', IPAddress(ip[0]))
-                                        if IPAddress(ip[0]) in IPNetwork(subnet): # if dependentPrefix is same as BGP He.net prefix
+                                        if IPAddress(ip[0]) in IPNetwork(subnet): # if each result line of traceroute is same as BGP He.net prefix
                                             isIpInISP=1
-                                            ipInISP=ip[0] # put the traceroute result into the ipInISP
-                                            print('ipInISP : ',ipINISP)
+                                            ipInISP=ip[0] # put the traceroute result into the ipInISP(=ISP exit IP)
+                                            print('ISP exit IP(ipInISP) : ',ipINISP) # this is eventually ISP exit  IP.
                                             break
                                     if (ipInISP!=0 and isIpInISP==0):
                                         ispExits.write(ipInISP + "\n")
                                         print "Exit added: " + ipInISP + "\n@@@@@@@@@@@@@@@@@@@@@@@@findISPexits Function@@@@@@@@@@@@@@@@@@@@@@@@"
                                         break
-                                if (i==31 and ipInISP!=0):
+                                if (i==len(hops) and ipInISP!=0):
                                     ispExits.write(ipInISP + "\n")
-                                    print "Exit added(when i==31): " + ipInISP + "\n@@@@@@@@@@@@@@@@@@@@@@@@@@findISPexits Function@@@@@@@@@@@@@@@@@@@@@@@@"
+                                    print "Exit added : " + ipInISP + "\n@@@@@@@@@@@@@@@@@@@@@@@@@@findISPexits Function@@@@@@@@@@@@@@@@@@@@@@@@"
                 dependentPrefixes.close()
                 EXITS_SEM=EXITS_SEM+1
 
@@ -254,22 +221,22 @@ class ExecutionAndParsing:
                 print(os.path.isfile(rv[0] + '-'+str(myASN)+"-exits.txt".encode('ascii')))
                 if os.path.isfile(rv[0] + '-'+str(myASN)+"-exits.txt".encode('ascii')):
                     ispExits=open(rv[0] + '-'+str(myASN)+"-exits.txt".encode('ascii'),"rb",0)
-                    print('ispExits : ', ispExits)
+#                   print('ispExits : ', ispExits)
                 else:
                     print "This file doesn't exsit: " +rv[0] + '-'+str(myASN)+"-exits.txt".encode('ascii')
                     continue
-                print"checking path..."
-                print(rv)
+                print"path file exist???"
                 print(os.path.isfile(rv[0] +'-'+str(myASN)+ "-paths.txt".encode('ascii')))
+                print"then make it!!"
                 if os.path.isfile(rv[0] +'-'+str(myASN)+ "-paths.txt".encode('ascii')):
                     TRS_SEM=TRS_SEM+1
                     ispExits.close()
                     continue  #os.remove(x[0] + "-exits.txt".encode('ascii'))
-                ispPaths=open(rv[0] +'-'+str(myASN)+ "-paths.txt".encode('ascii'),"wb",0)
+                ispPaths=open(rv[0] +'-'+str(myASN)+ "-paths.txt".encode('ascii'),"wb",0) # wb means file is opened for writing in binary mode.
                 print('ispPaths : ', ispPaths)
 
                 for exit in ispExits:
-                    print"tracerouting...... toward ispExits"
+#                    print"tracerouting...... toward ispExits"
                     for asnTrs, trs in traceRouteServerList.iteritems():
                         try:
                             tn=telnetlib.Telnet(trs[0],0,timeout=12000)
@@ -282,35 +249,67 @@ class ExecutionAndParsing:
                                 if len(trs)>3:
                                     tn.read_until(trs[3])
                                     tn.write(trs[4] + b"\n")
-                        tn.write("terminal length 0\n".encode('ascii'))
+                        tn.write("terminal length 0".encode('ascii')+"\n".encode('ascii'))
                     
-                        print "Searching ISP path to exit: " + exit
+#                        print "Searching ISP path to exit: " + exit
                         traceRoute="traceroute ".encode('ascii') + exit
+#                        print "traceroute : " + traceRoute
                         try:
                                 tn.write(traceRoute)
-                                line = tn.read_until("traceroute")
+                                line = tn.read_until("Tracing")
+#                                print 'current location :'+ str(line)
+                                line = tn.read_until(b"\r\n")
+#                                print 'current location :'+ str(line)
                                 line = tn.read_until(b"\n")
-                                line = tn.read_until(b"\n")
+#                                print 'current location :'+ str(line)
+#                                line = tn.read_until(b"\n")
+#                                line = tn.read_until(b"\n")
+#                                line = tn.read_until(b"\n")
                         except:
                                 break
-                        exitIP=str(exit).split('\n')
+                        exitIP=str(exit).split('\r\n')
                         path=""
                         ttl=0
                         ip=[]
+                        kk=0
                         try:
-                                while ip==[] or ip[0]!=exitIP[0]:
+                                while ip==[] or ip[0] != exitIP[0]:
                                     print 'reading res with ttl ' + str(ttl)
                                     line = tn.read_until(b"\n")
                                     ttl=ttl+1
                                     parts=line.split()
-                                    ip = re.findall( r'[0-9]+(?:\.[0-9]+){3}', line )
+                                    print 'parts : '+str(parts)
+                                    if any("*" in s for s in parts[1]):
+                                        if kk > 1 :
+                                            break
+                                        kk=kk+1
+                                        continue
+                                    else:
+                                        ip = re.findall( r'[0-9]+(?:\.[0-9]+){3}', line )
+
                                     isIpInISP=0
                                     if ip!=[]:
                                         for prefix in myPrefixes:
                                             subnet= str(prefix[0]) + "/" + str(prefix[1])
-                                            if IPAddress(ip[0]) in IPNetwork(subnet):
-                                                path=path+ip[0]+':'+parts[1]+','
-                                                break
+                                            if IPAddress(ip[0]) in IPNetwork(subnet): # check if traceroute result is same as BGP.he
+                                                print 'found!! in BGP.he prefix'
+                                                if parts[1].isalpha() :
+                                                    path=path+ip[0]+':'+parts[1]+', '
+                                                    print 'path : '+ str(path)
+                                                    break
+                                                elif parts[0] == ip[0]:
+                                                    path=path+ip[0]+':'+parts[0]+', '
+                                                    print 'path : '+str(path)
+                                                    break
+                                                else:
+                                                    path=path+ip[0]+':'+parts[1]+', '
+                                                    print 'path : '+str(path)
+                                                    break
+                                    print ('ip[0] : ' , str(ip[0]))
+                                    print ('exitIP[0] : ' , str(exitIP[0]))
+                                    if ip[0]==exitIP[0]: 
+                                             break
+                                    print 'go to while'
                         except:
                                 break
                         ispPaths.write(path+"\n")
@@ -334,7 +333,7 @@ class ExecutionAndParsing:
             if EXITS_SEM>0:
                 EXITS_SEM=EXITS_SEM-1
                 if os.path.isfile(rv[0] + '-'+str(myASN)+"-exits.txt".encode('ascii')):
-                    ispExits=open(rv[0] + '-'+str(myASN)+"-exits.txt".encode('ascii'),"rb",0)
+                    ispExits=open(rv[0] + '-'+str(myASN)+"-exits.txt".encode('ascii'),"rb",0) # rb means read binary.
                 else:
                     print "This file doesn't exsit: " +rv[0] + '-'+str(myASN)+"-exits.txt".encode('ascii')
                     continue
@@ -347,7 +346,7 @@ class ExecutionAndParsing:
                 for exit in ispExits:
                     print "Searching ISP path to exit: " + exit
                     exitIP=str(exit).split('\n')
-                    proc = subprocess.Popen(["tracert", exitIP[0]], stdout=subprocess.PIPE, shell=True)
+                    proc = subprocess.Popen(["traceroute", exitIP[0]], stdout=subprocess.PIPE, shell=True)
                     (out, err) = proc.communicate()
                     hops=out.split('\n')
                     path=""
@@ -375,8 +374,8 @@ class ExecutionAndParsing:
 
 class RocketFuel:
     myASN=0   #the ASN of the ISP: 9116 / 12849
-    ed=EgressDiscovery()
-    tg=TasklistGeneration()
+#    ed=EgressDiscovery()
+#    tg=TasklistGeneration()
     ep=ExecutionAndParsing()
     def __init__(self, asn=0):
         asn=input("Set ASN:")
@@ -542,9 +541,9 @@ class MapGraph:
 r=RocketFuel()
 mg = MapGraph(r.myASN)
 
-thread.start_new_thread(r.ed.findAllDependentPrefixes,(r.ed,r.myASN)) # egree discovery
-thread.start_new_thread(r.tg.findISPexits,(r.tg,r.myASN)) # tasklist generation
-#thread.start_new_thread(r.ep.findAllPaths,(r.ep, r.myASN)) # execution and parsing
+#thread.start_new_thread(r.ed.findAllDependentPrefixes,(r.ed,r.myASN)) # egree discovery
+#thread.start_new_thread(r.tg.findISPexits,(r.tg,r.myASN)) # tasklist generation
+thread.start_new_thread(r.ep.findAllPaths,(r.ep, r.myASN)) # execution and parsing
 #mg.makeGraph()
 
 while True:
