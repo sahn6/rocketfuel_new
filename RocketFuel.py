@@ -38,8 +38,8 @@ routeViewList = [
                   ###["route-views.nwax.routeviews.org"],
                   [b"route-views.wide.routeviews.org"],
 #                  [b"route-views.sydney.routeviews.org"],
-#                  [b"route-views.saopaulo.routeviews.org"],
-#                  [b"route-views.telxatl.routeviews.org"],
+                  [b"route-views.saopaulo.routeviews.org"],
+                  [b"route-views.telxatl.routeviews.org"],
                   ###["bgpmon.routeviews.org"],
                   ###SSH username&password[,"archive.routeviews.org"],
                   ###SSH username&password[,"bgplay.routeviews.org"],
@@ -80,9 +80,9 @@ traceRouteServerList = {
 #                        '6730':['routeserver.sunrise.ch'],
                         ###'6746':['route-server.astralnet.ro'],
                         ###'6939':'route-server.he.net',
-#                        '7018':['route-server.ip.att.net','login:','rviews','Password:','rviews'],
+                        '7018':['route-server.ip.att.net','login:','rviews','Password:','rviews'],
                         ###'7132':['route-server.sbcglobal.net'],
-#                        '7474':['route-views.optus.net.au'],
+                        '7474':['route-views.optus.net.au'],
                         ###'7911':['route-server.wcg.net'],
 #                        '7922':['route-server.newyork.ny.ibone.comcast.net','Username:','rviews'],
                         ###'8218':['route-server.as8218.eu'],
@@ -106,7 +106,7 @@ traceRouteServerList = {
 #                        '3582':['route-views.oregon-ix.net','Username:','rviews']
                          }
 RV_SEM = 0
-EXITS_SEM = 2
+EXITS_SEM = 0
 TRS_SEM = 0
 LU_SEM = 0
 
@@ -155,7 +155,35 @@ class EgressDiscovery: # search dependent prefix from BGP table
                         if(str(myASN).encode('ascii') in parts): #ISP's ASN in route
                             line=tn.read_until(b"\n") # read end line
                             parts = line.split()
-#                            print( :
+                            if(((len(parts)>2) and (b"." in parts[2])) or (rv[0] in line) or ('\r\n' == line)):
+                                bgpTall.write(networkDestination + "\n".encode('ascii'))
+                                print "Independent Prefix added:"+ networkDestination +"\n!!!!!!!!!!!!!!!!!!!!!!!!!!!!findAllDependentPrefixes Function!!!!!!!!!!!!!!!!!!!!!!!!!!!!!"
+                                break;
+                        else:
+                            line=tn.read_until(b"\n")
+                            parts = line.split()
+                            while not (((len(parts)>2) and (b"." in parts[2])) or (rv[0] in line) or ('\r\n' == line)):
+                                line=tn.read_until(b"\n")
+                                parts = line.split()
+                            break;
+            bgpTall.close()
+            RV_SEM=RE_SEM+1
+            tn.close
+
+class TasklistGeneration:
+    def findISPexits(ss,sss,myASN): 
+        global RV_SEM
+        global EXIT_SEM
+        prefixesFile='as'+str(myASN)+'htm'
+        prefixes=subnet_soup.getprefixes(prefixesFile)
+        for rv in routeViewList:
+            while RV_SEM <= 0:
+                time.sleep(30)
+            if RV_SEM > 0:
+                RV_SEM = RV_SEM -1
+                if os.path.isfile(rv[0]+'-'+str(myASN)+"-allDependentPrefixes.txt".encode('ascii')):
+                    dependentPrefixes=open(rv[0] +'-'+str(myASN)+ "-allDependentPrefixes.txt".encode('ascii'),"rb",0)
+                else:
                     print "This file doesn't exsit: " + rv[0] +'-'+str(myASN)+ "-allDependentPrefixes.txt".encode('ascii')
                     continue
                 print(rv[0])
@@ -204,7 +232,7 @@ class EgressDiscovery: # search dependent prefix from BGP table
                 EXITS_SEM=EXITS_SEM+1
 
 class ExecutionAndParsing:
-    def findAllPaths(ss,sss,myASN): #making tasklist for trace routing - ASN & IP (exit from the ISP)
+    def findAllPaths(ss,sss,myASN): #making tasklist for trace routing - ASN & IP
         print('START execution and parsing') 
         global EXITS_SEM
         global TRS_SEM  #to erase
@@ -323,7 +351,7 @@ class ExecutionAndParsing:
                 ispPaths.close()
                 TRS_SEM=TRS_SEM+1
 
-    def findAllPathsByLocalUser(ss,sss,myASN): #making tasklist for trace routing - ASN & IP (exit from the ISP)
+    def findAllPathsByLocalUser(ss,sss,myASN): #making tasklist for trace routing
         print('START find all paths by local user')
         global EXITS_SEM
         global LU_SEM    #to erase
@@ -348,27 +376,62 @@ class ExecutionAndParsing:
                     
                 for exit in ispExits:
                     print "Searching ISP path to exit: " + exit
-                    exitIP=str(exit).split('\n')
-                    proc = subprocess.Popen(["traceroute", exitIP[0]], stdout=subprocess.PIPE, shell=True)
+                    exitIP=str(exit).split('\r\n')
+#                    print( "exitIP : " , exitIP)
+#                    print "tracerouting.... to the exit"
+                    proc = subprocess.Popen(["traceroute", exitIP[0]], stdout=subprocess.PIPE, shell=False)
                     (out, err) = proc.communicate()
                     hops=out.split('\n')
+                    print('len(hops) : ' , len(hops))
                     path=""
                     ttl=0
                     ip=[]
-                    for i in range(4,34):
+                    kkCount=0
+#                    print('result : ', hops[4])
+#                    for i in range(4,34):
+                    for i in range(1,len(hops)-1):
                         line = hops[i]
                         ttl=ttl+1
                         parts=line.split()
+                        print ('parts : ' ,parts)
                         ip = re.findall( r'[0-9]+(?:\.[0-9]+){3}', line )
                         isIpInISP=0
+                        if any("*" in s for s in parts[3]):
+                            kkCount = kkCount+1
+                            if kkCount > 2 :
+                                print "too much *, escaped"
+                                break
+                            continue
                         if ip!=[]:
                             for prefix in myPrefixes:
                                 subnet= str(prefix[0]) + "/" + str(prefix[1])
                                 if IPAddress(ip[0]) in IPNetwork(subnet):
-                                    path=path+ip[0]+':'+parts[1]+','
-                                    break
+                                    print 'found!! in BGP.he prefix'
+#                                    path=path+ip[0]+':'+parts[1]+','
+#                                    print('current path: ', path)
+#                                    break
+                                    if parts[1].isalpha() :
+                                        path=path+ip[0]+':'+parts[1]+', '
+                                        print 'path : '+ str(path)
+                                        break
+                                    elif parts[0] == ip[0]:
+                                        path=path+ip[0]+':'+parts[0]+', '
+                                        print 'path : '+str(path)
+                                        break
+                                    elif parts[1] == '*':
+                                        path=path+ip[0]+':'+parts[1]+', '
+                                        print 'path : '+str(path)
+                                        break
+                                    else:
+                                        path=path+ip[0]+':'+parts[1]+', '
+                                        print 'path : '+str(path)
+                                        break
+                            print ('ip[0] : ' , str(ip[0]))                
+                            print ('exitIP[0] : ' , str(exitIP[0]))
                             if ip[0]==exitIP[0]:
+                                print "ip[0] is matched with exitIP[0]!!!"
                                 break;
+                            print 'read next hop line'+'\n'
                     ispPaths.write(path+"\n")
                     print "Path added: " + path + '\n$$$$$$$$$$$$$$$$$$$$$$$$findAllPathsByLocalUser Function$$$$$$$$$$$$$$$$$$$'
             ispExits.close()
@@ -377,9 +440,9 @@ class ExecutionAndParsing:
 
 class RocketFuel:
     myASN=0   #the ASN of the ISP: 9116 / 12849
-#    ed=EgressDiscovery()
-#    tg=TasklistGeneration()
-    ep=ExecutionAndParsing()
+    ed=EgressDiscovery()
+    tg=TasklistGeneration()
+#    ep=ExecutionAndParsing()
     def __init__(self, asn=0):
         asn=input("Set ASN:")
         self.myASN=int(asn)
@@ -392,7 +455,6 @@ class MapGraph:
         self.ISP_Network = networkx.Graph()
         self.files_read = 0
         self.border_points = set()
-        print('_init_ of MapGraph start')
         if os.path.isfile(self.filename):
             load_file = shelve.open(self.filename, 'r')
             self.files_read = load_file['files_read']
@@ -400,12 +462,13 @@ class MapGraph:
             self.border_points = load_file['border_points']
         self.ASN = ASN
         plt.ion()
-        country = raw_input('enter country to focus on map [Israel/Usa/Australia/other]: ')
+
+        country = raw_input('enter country to focus on map [Israel/Usa/Bahrain/other]: ')
         if country == 'Israel' or country == 'israel' or country == 'ISRAEL':
-            self.wmap = Basemap(projection='aeqd', lat_0 = 31.4, lon_0 = 35, width = 200000, height = 450000, resolution = 'i')
+            self.wmap = Basemap(projection='mill', lat_0 = 31.4, lon_0 = 35, width = 200000, height = 450000, resolution = 'i')
         elif country == 'USA' or country == 'usa':
             self.wmap = Basemap(projection='aeqd', lat_0 = 40, lon_0 = -98, width = 4500000, height = 2700000, resolution = 'i')
-        elif country == 'Australia' or 'australia' or 'AUSTRALIA':
+        elif country == 'Bahrain' or 'australia' or 'AUSTRALIA':
             self.wmap = Basemap(projection='lcc', lat_0 = -23.07, lon_0 = 132.08, width = 4500000, height = 3500000, resolution = 'i')
         elif country == 'other':
             #self.wmap = Basemap(projection='cyl', resolution = 'c')
@@ -422,8 +485,7 @@ class MapGraph:
         self.wmap.fillcontinents(color='coral', lake_color = 'aqua')
         #plt.hold(True)
         for edge in self.ISP_Network.edges():
-            print"edge HERE?"
-            print 'placeing ' + str(edge[0][1][1]) + ' ' + str(edge[0][1][0])
+            print 'placing ' + str(edge[0][1][1]) + ' ' + str(edge[0][1][0])
 
             #First coordinate appear three time
             map_line_x = [edge[0][1][1],edge[0][1][1],edge[0][1][1],edge[1][1][1]]
@@ -446,7 +508,6 @@ class MapGraph:
         color_list = {}
         plt.clf()
         for node in self.ISP_Network.nodes():
-                print"node here??"
                 print('**** node[0] is ', node[0])
                 label_list[node] = node[0]
                 if node in self.border_points:
@@ -478,7 +539,7 @@ class MapGraph:
                     self.PrintToMap()
             if TRS_SEM > self.files_read:
                 current_file = rv[0] +'-'+str(self.ASN)+ "-paths.txt".encode('ascii')
-                print 'adding paths from ' + current_file
+                print 'Adding paths from ' + current_file
                 if os.path.isfile(current_file):
                     path_file=open(current_file,"r",0)
                 else:
@@ -486,9 +547,15 @@ class MapGraph:
                     continue
                 
                 graph_path = []
-                for line in path_file:   
-                    path = line.split(',')
+                for line in path_file: 
+                    if line == "":
+                        break
+                    if line == "\n":
+                        continue
+                    path = line.split(', ')
+#                    print('current path line : ', path)
                     garbage = path.pop() 
+                    print('len(path) : ', len(path))
                     self.border_points.add(path[0])
                     self.border_points.add(path[len(path)-1])
                     for server in path:
@@ -496,24 +563,37 @@ class MapGraph:
                         name = server.split(':')[1]
                         match = geolite2.lookup(ip)
                         graph_path.append((ip, match.location, name))
+#                        print ('graph_path : ', str(graph_path))
                         print 'added vertex ' + str(match.location[0]) + ' ' + str(match.location[1])
+                        print "next server in path!"
+                        print("IP: %s" % match.ip)
+                        print("Country: %s" % match.country)
+                        print("Continent: %s" % match.continent)
+#                        print("Subvisions: %s" % comma_sep(match.subdivisions))
+#                        print("Timezone: %s" % match.timezone)
+#                        print("Location: %s" % comma_sep(match.location))
                     self.border_points.add(graph_path[0])
                     self.border_points.add(graph_path[len(path)-1])
                     self.ISP_Network.add_path(graph_path)
+#                    if next(path_file) is None:
+#                            break
+                    print "next path line" + "\n"
                 self.files_read += 1
                 self.PrintToMap()
                 self.PrintToGraph()
                 plt.pause(5)
-                print 'printed map after PrintToMap and PrintToGraph'
+
+                print 'Alias Started!'
                 alias_data = ''
                 label_list = {}
+                print( 'len(self.ISP_Network.nodes) : ', len(self.ISP_Network.nodes()))
                 for node in self.ISP_Network.nodes():
-                    print('alias node start')
                     alias_data = alias_data + node[0] + ' ' + str(node[1][0]) +'_' + str(node[1][1]) + ' ' +  node[2] + '\n'
                 alias_file = open(self.alias_filename,'w')
                 alias_file.write(alias_data) 
                 alias_file.close()
                 unionFind, IndexToAddress, AddressToIndex, listOfLists = alias_resolve(os.getcwd(), self.alias_filename)
+
                 new_graph = networkx.Graph()
                 for edge in self.ISP_Network.edges():
                     ip1 = self.address_to_real_address(unionFind, AddressToIndex, IndexToAddress, edge[0][0])
@@ -544,9 +624,12 @@ class MapGraph:
 r=RocketFuel()
 mg = MapGraph(r.myASN)
 
-#thread.start_new_thread(r.ed.findAllDependentPrefixes,(r.ed,r.myASN)) # egree discovery
-#thread.start_new_thread(r.tg.findISPexits,(r.tg,r.myASN)) # tasklist generation
-thread.start_new_thread(r.ep.findAllPaths,(r.ep, r.myASN)) # execution and parsing
+# 'start_new_thread' means func(=thread execution function), args(=argument to be thrown to the func), kwargs(=keyword argument) 
+# for example, below, r.ed is func and r.myASN is args   
+thread.start_new_thread(r.ed.findAllDependentPrefixes,(r.ed,r.myASN)) # egree discovery
+thread.start_new_thread(r.tg.findISPexits,(r.tg,r.myASN)) # tasklist generation
+#thread.start_new_thread(r.ep.findAllPaths,(r.ep,r.myASN)) # execution and parsing
+#thread.start_new_thread(r.ep.findAllPathsByLocalUser,(r.ep,r.myASN)) # execution and parsing
 #mg.makeGraph()
 
 while True:
