@@ -26,19 +26,19 @@ from alias_resolution import *
 #In order to identify the ISP exit servers.
 
 routeViewList = [
+#                  [b"route-views.routeviews.org",b"rviews"],
                   ###["route-views2.routeviews.org"],
-#                  [b"route-views4.routeviews.org"], # not working
+#                  [b"route-views3.routeviews.org"],
+#                  [b"route-views4.routeviews.org"],
                   ###["route-views6.routeviews.org"],
                   ###["route-views.eqix.routeviews.org"],
-#                  [b"route-views.isc.routeviews.org"], # not working
-#                  [b"route-views.kixp.routeviews.org"], # not working
-#                  [b"route-views.linx.routeviews.org"], # not working                 
+#                  [b"route-views.isc.routeviews.org"],
+#                  [b"route-views.kixp.routeviews.org"],
+#                  [b"route-views.linx.routeviews.org"],                  
                   ###["route-views.nwax.routeviews.org"],
                   [b"route-views.wide.routeviews.org"],
-                  [b"route-views.sydney.routeviews.org"],
-                  [b"route-views3.routeviews.org"],
- #                 [b"route-views.routeviews.org",b"rviews"],
-#                  [b"route-views.saopaulo.routeviews.org"], # not working
+#                  [b"route-views.sydney.routeviews.org"],
+#                  [b"route-views.saopaulo.routeviews.org"],
 #                  [b"route-views.telxatl.routeviews.org"],
                   ###["bgpmon.routeviews.org"],
                   ###SSH username&password[,"archive.routeviews.org"],
@@ -107,7 +107,7 @@ traceRouteServerList = {
                          }
 RV_SEM = 0
 EXITS_SEM = 0
-TRS_SEM = 0
+TRS_SEM = 2
 LU_SEM = 0
 
 class EgressDiscovery: # search dependent prefix from BGP table
@@ -127,13 +127,13 @@ class EgressDiscovery: # search dependent prefix from BGP table
             print('BGPTall', bgpTall)
             try:
                 print('telnetting now... toward ', rv)
-                tn=telnetlib.Telnet(rv[0],0,timeout=12000000)
+                tn=telnetlib.Telnet(rv[0],0,timeout=12000)
             except:
                 bgpTall.close()
                 continue
             if len(rv)>1:
                 tn.read_until(b"Username:")
-                tn.write(rv[1] + b"\n")
+                tn.write(rv[1] + b"\r\n")
                 print("****username(rviews) was entered****")
             #print(len(rv))
 #            tn.write("terminal length 0\r\n".encode('ascii'))
@@ -152,23 +152,20 @@ class EgressDiscovery: # search dependent prefix from BGP table
                 if((len(parts)>2) and (b"." in parts[2])):   #do for each network destination
                     networkDestination = parts[1]            #save network prefix
                     while True:
-                        if(str(myASN).encode('ascii') in parts): # check if ISP's ASN in route ; ASN in path section???
-                            line=tn.read_until(b"\n") # read next line
+                        if(str(myASN).encode('ascii') in parts): #ISP's ASN in route
+                            line=tn.read_until(b"\n") # read end line
                             parts = line.split()
                             if(((len(parts)>2) and (b"." in parts[2])) or (rv[0] in line) or ('\r\n' == line)):
-                                bgpTall.write(networkDestination + "\n".encode('ascii')) # if each line of BGP table have the same ASN, put the network IP in BGP table into the networkDestination.
+                                bgpTall.write(networkDestination + "\n".encode('ascii'))
                                 print "Independent Prefix added:"+ networkDestination +"\n!!!!!!!!!!!!!!!!!!!!!!!!!!!!findAllDependentPrefixes Function!!!!!!!!!!!!!!!!!!!!!!!!!!!!!"
                                 break;
                         else:
                             line=tn.read_until(b"\n")
                             parts = line.split()
                             while not (((len(parts)>2) and (b"." in parts[2])) or (rv[0] in line) or ('\r\n' == line)):
-                                if tn.read_until(b"\r\n") is None:
-                                    break;
-                                else :  
-                                    line=tn.read_until(b"\r\n")
-                                    parts = line.split()
-                                    break;
+                                line=tn.read_until(b"\n")
+                                parts = line.split()
+                            break;
             bgpTall.close()
             RV_SEM=RV_SEM+1
             tn.close
@@ -178,7 +175,7 @@ class TasklistGeneration:
         global RV_SEM
         global EXIT_SEM
         prefixesFile='as'+str(myASN)+'.htm'
-        myPrefixes=subnet_soup.getprefixes(prefixesFile)
+        prefixes=subnet_soup.getprefixes(prefixesFile)
         for rv in routeViewList:
             while RV_SEM <= 0:
                 time.sleep(30)
@@ -217,12 +214,12 @@ class TasklistGeneration:
                                 if ip!=[]:
                                     for prefix in myPrefixes:
                                         subnet= str(prefix[0]) + "/" + str(prefix[1])
-                                        print('subnet is : ', subnet)
-                                        print('IPAddress(ip[0]) : ', IPAddress(ip[0]))
+                                        #print('subnet is : ', subnet)
+                                        #print('IPAddress(ip[0]) : ', IPAddress(ip[0]))
                                         if IPAddress(ip[0]) in IPNetwork(subnet): # if each result line of traceroute is same as BGP He.net prefix
                                             isIpInISP=1
                                             ipInISP=ip[0] # put the traceroute result into the ipInISP(=ISP exit IP)
-                                            print('ISP exit IP(ipInISP) : ',ipInISP) # this is eventually ISP exit  IP.
+                                            print('ISP exit IP(ipInISP) : ',ipINISP) # this is eventually ISP exit  IP.
                                             break
                                     if (ipInISP!=0 and isIpInISP==0):
                                         ispExits.write(ipInISP + "\n")
@@ -267,9 +264,9 @@ class ExecutionAndParsing:
                 print('ispPaths : ', ispPaths)
 
                 for exit in ispExits:
-                    for asnTrs, trs in traceRouteServerList.iteritems(): # using third party traceroute server
+                    for asnTrs, trs in traceRouteServerList.iteritems():
                         try:
-                            tn=telnetlib.Telnet(trs[0],0,timeout=12000000)
+                            tn=telnetlib.Telnet(trs[0],0,timeout=12000)
                         except:
                             continue
                         if len(trs)>1:
@@ -445,7 +442,7 @@ class ExecutionAndParsing:
 ##############################################################################
 class RocketFuel:
     myASN=0   #the ASN of the ISP: 9116 / 12849
-    ed=EgressDiscovery()
+#    ed=EgressDiscovery()
 #    tg=TasklistGeneration()
 #    ep=ExecutionAndParsing()
     def __init__(self, asn=0):
@@ -455,11 +452,12 @@ class RocketFuel:
 class MapGraph:
 
     def __init__(self,ASN):
-        self.filename = str(ASN) + 'network graph'
+        self.filename = str(ASN) + 'NetworkGraph'
         self.alias_filename = str(ASN) + 'alias_candidates.txt'
         self.ISP_Network = networkx.Graph()
         self.files_read = 0
         self.border_points = set()
+        print(os.path.isfile(self.filename))
         if os.path.isfile(self.filename):
             Load_file = shelve.open(self.filename, 'r')
             self.files_read = load_file['files_read']
@@ -631,15 +629,15 @@ class MapGraph:
                 print 'printed map at the end after saving'
 ############################################################################
 r=RocketFuel()
-#mg = MapGraph(r.myASN)
+mg = MapGraph(r.myASN)
 
 # 'start_new_thread' means func(=thread execution function), args(=argument to be thrown to the func), kwargs(=keyword argument) 
 # for example, below, r.ed is func and r.myASN is args   
-thread.start_new_thread(r.ed.findAllDependentPrefixes,(r.ed,r.myASN)) # egree discovery
+#thread.start_new_thread(r.ed.findAllDependentPrefixes,(r.ed,r.myASN)) # egree discovery
 #thread.start_new_thread(r.tg.findISPexits,(r.tg,r.myASN)) # tasklist generation
 #thread.start_new_thread(r.ep.findAllPaths,(r.ep,r.myASN)) # execution and parsing
 #thread.start_new_thread(r.ep.findAllPathsByLocalUser,(r.ep,r.myASN)) # execution and parsing
-#mg.makeGraph()
+mg.makeGraph()
 
 while True:
         continue
